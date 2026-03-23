@@ -2,13 +2,11 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*' # Trigger on tags like v3.5.0
   workflow_dispatch:
 
 jobs:
   build-and-release:
-    name: Build & Release
+    name: Build & Release (x64)
     runs-on: windows-2025-vs2026
     steps:
       - name: Check out source code
@@ -19,42 +17,26 @@ jobs:
       - name: Install bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Add msbuild to PATH
-        uses: microsoft/setup-msbuild@v2
-        with:
-          vs-version: '[17.0,18.0)'
-
       - name: Generate docs
         run: bun .\cmd\gen-docs.ts
 
       - name: Build Release x64
-        run: msbuild vs2026/SumatraPDF.slnx /t:SumatraPDF:Rebuild /p:Configuration=Release /p:Platform=x64 /m
+        run: msbuild vs2026/SumatraPDF.slnx /t:SumatraPDF:Rebuild;SumatraPDF-dll:Rebuild /p:Configuration=Release;Platform=x64 /m
 
-      - name: Build Release x86
-        run: msbuild vs2026/SumatraPDF.slnx /t:SumatraPDF:Rebuild /p:Configuration=Release /p:Platform=x86 /m
-
-      - name: Prepare Release Artifacts
+      - name: Prepare Release Artifact
         shell: pwsh
         run: |
-          $artifacts = @()
-          if (Test-Path -Path "out\rel64\SumatraPDF.exe") {
-              Compress-Archive -Path "out\rel64\SumatraPDF.exe" -DestinationPath "SumatraPDF-x64.zip" -Force
-              $artifacts += "SumatraPDF-x64.zip"
-          }
-          if (Test-Path -Path "out\rel32\SumatraPDF.exe") {
-              Compress-Archive -Path "out\rel32\SumatraPDF.exe" -DestinationPath "SumatraPDF-x86.zip" -Force
-              $artifacts += "SumatraPDF-x86.zip"
-          }
-          
-          if ($artifacts.Count -eq 0) {
-              Write-Error "No built binaries found to release!"
+          if (-not (Test-Path "out\rel64\SumatraPDF.exe")) {
+              Write-Error "SumatraPDF.exe not found!"
               exit 1
           }
+          $files = @("out\rel64\SumatraPDF.exe")
+          if (Test-Path "out\rel64\libmupdf.dll") { $files += "out\rel64\libmupdf.dll" }
+          Compress-Archive -Path $files -DestinationPath "SumatraPDF-x64.zip" -Force
 
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            SumatraPDF-*.zip
+          files: SumatraPDF-x64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
