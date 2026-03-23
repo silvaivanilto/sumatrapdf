@@ -3,8 +3,8 @@ name: Release
 on:
   push:
     tags:
-      - 'v*' # Trigger on tags like v1.0.0, v3.5.0
-  workflow_dispatch: # Allow manual trigger
+      - 'v*' # Trigger on tags like v3.5.0
+  workflow_dispatch:
 
 jobs:
   build-and-release:
@@ -19,8 +19,19 @@ jobs:
       - name: Install bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Build
-        run: bun .\cmd\build-ci.ts
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v2
+        with:
+          vs-version: '[17.0,18.0)'
+
+      - name: Generate docs
+        run: bun .\cmd\gen-docs.ts
+
+      - name: Build Release x64
+        run: msbuild vs2026/SumatraPDF.slnx /t:SumatraPDF:Rebuild /p:Configuration=Release /p:Platform=x64 /m
+
+      - name: Build Release x86
+        run: msbuild vs2026/SumatraPDF.slnx /t:SumatraPDF:Rebuild /p:Configuration=Release /p:Platform=x86 /m
 
       - name: Prepare Release Artifacts
         shell: pwsh
@@ -33,10 +44,6 @@ jobs:
           if (Test-Path -Path "out\rel32\SumatraPDF.exe") {
               Compress-Archive -Path "out\rel32\SumatraPDF.exe" -DestinationPath "SumatraPDF-x86.zip" -Force
               $artifacts += "SumatraPDF-x86.zip"
-          }
-          if (Test-Path -Path "out\arm64\SumatraPDF.exe") {
-              Compress-Archive -Path "out\arm64\SumatraPDF.exe" -DestinationPath "SumatraPDF-arm64.zip" -Force
-              $artifacts += "SumatraPDF-arm64.zip"
           }
           
           if ($artifacts.Count -eq 0) {
