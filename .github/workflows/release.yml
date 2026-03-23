@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on tags like v1.0.0, v3.5.0
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  build-and-release:
+    name: Build & Release
+    runs-on: windows-2025-vs2026
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Build
+        run: bun .\cmd\build-ci.ts
+
+      - name: Prepare Release Artifacts
+        shell: pwsh
+        run: |
+          $artifacts = @()
+          if (Test-Path -Path "out\rel64\SumatraPDF.exe") {
+              Compress-Archive -Path "out\rel64\SumatraPDF.exe" -DestinationPath "SumatraPDF-x64.zip" -Force
+              $artifacts += "SumatraPDF-x64.zip"
+          }
+          if (Test-Path -Path "out\rel32\SumatraPDF.exe") {
+              Compress-Archive -Path "out\rel32\SumatraPDF.exe" -DestinationPath "SumatraPDF-x86.zip" -Force
+              $artifacts += "SumatraPDF-x86.zip"
+          }
+          if (Test-Path -Path "out\arm64\SumatraPDF.exe") {
+              Compress-Archive -Path "out\arm64\SumatraPDF.exe" -DestinationPath "SumatraPDF-arm64.zip" -Force
+              $artifacts += "SumatraPDF-arm64.zip"
+          }
+          
+          if ($artifacts.Count -eq 0) {
+              Write-Error "No built binaries found to release!"
+              exit 1
+          }
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            SumatraPDF-*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
